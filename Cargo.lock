@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mrt-parser"
+name = "mrt"
 version = "0.1.0"
 dependencies = [
  "nom 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
