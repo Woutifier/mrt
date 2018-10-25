@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-#![feature(test)]
+
 /// An MRT (RFC6396) file parser implemented in Rust, using Nom
 /// Copyright (C) 2018  Wouter B. de Vries
 ///
@@ -19,7 +19,7 @@
 #[macro_use]
 extern crate nom;
 use nom::{IResult, be_u8, be_u16, be_u32};
-extern crate test;
+//extern crate test;
 
 use std::fmt;
 use std::fs::File;
@@ -622,7 +622,7 @@ impl Iterator for MrtFile {
 mod tests {
     use super::*;
     use std::str::FromStr;
-    use test::Bencher;
+    //use test::Bencher;
 
     const EXAMPLE_DATA: &[u8] = include_bytes!("../example_data/openbgpd_rib_table-v2");
 
@@ -672,7 +672,8 @@ mod tests {
         }
     }
 
-    #[bench]
+    // Disable benchmarks until bench is stabilized
+    /*#[bench]
     fn bench_parse_first_entry(b: &mut Bencher) {
         b.iter(|| mrt_entry(EXAMPLE_DATA))
     }
@@ -686,5 +687,5 @@ mod tests {
                 remaining = remaining2;
             }
         })
-    }
+    }*/
 }
