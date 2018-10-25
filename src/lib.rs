@@ -29,9 +29,9 @@ use std::str;
 
 #[derive(Debug)]
 pub struct MrtHeader {
-    timestamp: u32,
-    mrt_type: MrtType,
-    mrt_subtype: MrtSubType,
+    pub timestamp: u32,
+    pub mrt_type: MrtType,
+    pub mrt_subtype: MrtSubType,
     length: u32,
 }
 
@@ -242,8 +242,8 @@ pub enum BgpMessage {
 }
 #[derive(Debug)]
 pub struct Route {
-    prefix_length: u8,
-    prefix: IpAddr,
+    pub prefix_length: u8,
+    pub prefix: IpAddr,
 }
 
 named!(bgp4mp_message_as4<&[u8], MrtMessage>,
