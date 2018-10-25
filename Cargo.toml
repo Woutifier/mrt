@@ -5,7 +5,6 @@ repository = "https://github.com/Woutifier/mrt"
 version = "0.1.0"
 authors = ["Wouter de Vries <wouter@wbdv.nl>"]
 readme = "README.md"
-license = "GPL-3.0-or-later"
 license-file = "LICENSE"
 
 [dependencies]
