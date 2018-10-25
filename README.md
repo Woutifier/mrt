@@ -1,5 +1,5 @@
 # mrt
-[![Build Status](https://travis-ci.org/Woutifier/mrt.svg?branch=master)](https://travis-ci.org/Woutifier/mrt)
+[![Build Status](https://travis-ci.org/Woutifier/mrt.svg?branch=master)](https://travis-ci.org/Woutifier/mrt) [![Docs](https://docs.rs/mrt/badge.svg)](https://docs.rs/mrt)
 
 An MRT (RFC6396) file parser implemented in Rust, using Nom.
 
