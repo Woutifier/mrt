@@ -26,7 +26,7 @@ use std::io::BufReader;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str;
 
-use nom::IResult;
+use nom::{IResult, be_u8, be_u16, be_u32};
 
 #[derive(Debug)]
 pub struct MrtHeader {
@@ -247,10 +247,10 @@ pub struct Route {
 
 named!(bgp4mp_message_as4<&[u8], MrtMessage>,
     do_parse!(
-        peer_as_number: u32!(nom::Endianness::Big) >>
-        local_as_number: u32!(nom::Endianness::Big) >>
-        interface_index: u16!(nom::Endianness::Big) >>
-        address_family: u16!(nom::Endianness::Big) >>
+        peer_as_number: be_u32 >>
+        local_as_number: be_u32 >>
+        interface_index: be_u16 >>
+        address_family: be_u16 >>
         peer_ip_address: switch!(value!(address_family == 2),
             false => map!(take!(4), |x| ip_prefix(x, false)) |
             true => map!(take!(16), |x| ip_prefix(x, true))
@@ -259,9 +259,8 @@ named!(bgp4mp_message_as4<&[u8], MrtMessage>,
             false => map!(take!(4), |x| ip_prefix(x, false)) |
             true => map!(take!(16), |x| ip_prefix(x, true))
         ) >>
-        take!(16) >>
-        u16!(nom::Endianness::Big) >>
-        message_type: bits!(take_bits!(u8, 8)) >>
+        take!(18) >>
+        message_type: be_u8 >>
         message: switch!(value!(message_type),
             1 => call!(bgp_message_open) |
             2 => call!(bgp_message_update, address_family == 2) |
@@ -280,7 +279,8 @@ named!(bgp_message_open<&[u8], BgpMessage>,
 
 named_args!(route(is_ipv6: bool)<&[u8], Route>,
     do_parse!(
-        prefix_length: bits!(take_bits!(u8, 8)) >>
+        //prefix_length: bits!(take_bits!(u8, 8)) >>
+        prefix_length: be_u8 >>
         prefix: map!(take!((f64::from(prefix_length)/8.0).ceil()), |x| ip_prefix(x, is_ipv6)) >>
         (Route{prefix_length, prefix})
     )
@@ -288,8 +288,8 @@ named_args!(route(is_ipv6: bool)<&[u8], Route>,
 
 named_args!(bgp_message_update(is_ipv6: bool)<&[u8], BgpMessage>,
     do_parse!(
-        withdrawn_routes: length_value!(u16!(nom::Endianness::Big), many0!(complete!(apply!(route, is_ipv6)))) >>
-        path_attributes: length_value!(u16!(nom::Endianness::Big), many0!(complete!(apply!(bgp_attribute, is_ipv6)))) >>
+        withdrawn_routes: length_value!(be_u16, many0!(complete!(apply!(route, is_ipv6)))) >>
+        path_attributes: length_value!(be_u16, many0!(complete!(apply!(bgp_attribute, is_ipv6)))) >>
         network_layer_reachability_information: many0!(complete!(apply!(route, is_ipv6))) >>
         (BgpMessage::UPDATE{withdrawn_routes, path_attributes, network_layer_reachability_information})
     )
@@ -305,9 +305,9 @@ named!(bgp_message_keepalive<&[u8], BgpMessage>,
 
 named!(mrt_message_peer_index_table<&[u8], MrtMessage>,
     do_parse!(
-        collector_bgp_id: u32!(nom::Endianness::Big) >>
-        view_name: map!(length_bytes!(u16!(nom::Endianness::Big)), str::from_utf8) >>
-        peers: length_count!(u16!(nom::Endianness::Big), peer_entry) >>
+        collector_bgp_id: be_u32 >>
+        view_name: map!(length_bytes!(be_u16), str::from_utf8) >>
+        peers: length_count!(be_u16, peer_entry) >>
         (MrtMessage::PEER_INDEX_TABLE{
         collector_bgp_id: collector_bgp_id,
         view_name: view_name.unwrap().to_string(),
@@ -317,8 +317,8 @@ named!(mrt_message_peer_index_table<&[u8], MrtMessage>,
 
 named_args!(rib_entry_header(is_ipv6: bool)<&[u8], RibEntryHeader>,
     do_parse!(
-        sequence_number: u32!(nom::Endianness::Big) >>
-        prefix_length: bits!(take_bits!(u8, 8)) >>
+        sequence_number: be_u32 >>
+        prefix_length: be_u8 >>
         prefix: take!((f64::from(prefix_length)/8.0).ceil()) >>
         (RibEntryHeader{sequence_number: sequence_number, prefix_length: prefix_length,
         prefix: ip_prefix(prefix, is_ipv6)})
@@ -328,7 +328,7 @@ named_args!(rib_entry_header(is_ipv6: bool)<&[u8], RibEntryHeader>,
 named_args!(mrt_rib_message(is_ipv6: bool)<&[u8], MrtMessage>,
     do_parse!(
         header: apply!(rib_entry_header, is_ipv6) >>
-        entries: length_count!(u16!(nom::Endianness::Big), apply!(rib_entry, is_ipv6)) >>
+        entries: length_count!(be_u16, apply!(rib_entry, is_ipv6)) >>
         (if is_ipv6 {
             MrtMessage::RIB_IPV6_UNICAST{header: header, entries: entries}
         } else {
@@ -339,9 +339,9 @@ named_args!(mrt_rib_message(is_ipv6: bool)<&[u8], MrtMessage>,
 
 named_args!(rib_entry(is_ipv6: bool)<&[u8], RibEntry>,
     do_parse!(
-        peer_index: u16!(nom::Endianness::Big) >>
-        originated_time: u32!(nom::Endianness::Big) >>
-        length: u16!(nom::Endianness::Big) >>
+        peer_index: be_u16 >>
+        originated_time: be_u32 >>
+        length: be_u16 >>
         bgp_attributes: length_value!(value!(length),
         many0!(complete!(apply!(bgp_attribute, is_ipv6)))) >>
         (RibEntry{peer_index: peer_index, originated_time: originated_time, length:length,
@@ -351,18 +351,18 @@ named_args!(rib_entry(is_ipv6: bool)<&[u8], RibEntry>,
 
 named!(peer_entry<&[u8], PeerEntry>,
     do_parse!(
-        peer_type: take!(1) >>
-        peer_bgp_id: u32!(nom::Endianness::Big) >>
-        peer_ip_address: switch!(value!((peer_type[0] & 0b1) == 0),
+        peer_type: be_u8 >>
+        peer_bgp_id: be_u32 >>
+        peer_ip_address: switch!(value!((peer_type & 0b1) == 0),
             true => map!(take!(4), |x| ip_prefix(x, false)) |
             false => map!(take!(16), |x| ip_prefix(x, true))
         ) >>
-        peer_as: switch!(value!((peer_type[0] & 0b10 != 0)),
-            true => u32!(nom::Endianness::Big) |
-            false => map!(u16!(nom::Endianness::Big), u32::from)
+        peer_as: switch!(value!((peer_type & 0b10 != 0)),
+            true => call!(be_u32) |
+            false => map!(be_u16, u32::from)
         ) >>
         (PeerEntry{
-        peer_type: peer_type[0],
+        peer_type: peer_type,
          peer_bgp_id: peer_bgp_id,
          peer_ip_address: peer_ip_address,
          peer_as: peer_as})
@@ -373,7 +373,7 @@ named!(mrt_header<&[u8], MrtHeader>,
     do_parse!(
         timestamp: unix_timestamp >>
         mrt_type: mrt_type >>
-        mrt_subtype: map!(u16!(nom::Endianness::Big), |x| to_mrt_sub_type(&mrt_type, x)) >>
+        mrt_subtype: map!(be_u16, |x| to_mrt_sub_type(&mrt_type, x)) >>
         length: length >>
       (MrtHeader{timestamp: timestamp, mrt_type: mrt_type, mrt_subtype: mrt_subtype,
       length: length}))
@@ -397,8 +397,11 @@ named_args!(bgp_attribute(is_ipv6: bool)<&[u8], BgpAttribute>,
     do_parse!(
         flags: bits!(tuple!(take_bits!(u8, 1), take_bits!(u8, 1), take_bits!(u8, 1),
         take_bits!(u8, 1))) >>
-        code: bits!(take_bits!(u8, 8)) >>
-        length: apply!(parse_varlength, flags.3 > 0) >>
+        code: be_u8 >>
+        length: switch!(value!(flags.3 > 0),
+            true => call!(be_u16) |
+            false => map!(be_u8, u16::from)
+        ) >>
         value: length_value!(value!(length), apply!(parse_bgp_attribute, code, is_ipv6, length)) >>
         (BgpAttribute{optional: flags.0 > 0, transitive: flags.1 > 0, partial: flags.2 > 0,
         extended_length: flags.3 > 0, length: length, value: value})
@@ -407,7 +410,7 @@ named_args!(bgp_attribute(is_ipv6: bool)<&[u8], BgpAttribute>,
 
 named!(origin<&[u8], BgpAttributeValue>,
     do_parse!(
-        value: switch!(bits!(take_bits!(u8, 8)),
+        value: switch!(be_u8,
             0 => value!(Origin::IGP) |
             1 => value!(Origin::EGP) |
             2 => value!(Origin::INCOMPLETE) |
@@ -426,20 +429,19 @@ named!(as_path<&[u8], BgpAttributeValue>,
 
 named!(as_path_segment<&[u8], AsPathSegment>,
     do_parse!(
-        segment_type: switch!(bits!(take_bits!(u8, 8)),
+        segment_type: switch!(be_u8,
             1 => value!(SegmentType::AS_SET) |
             2 => value!(SegmentType::AS_SEQUENCE) |
             _ => value!(SegmentType::UNKNOWN)
         ) >>
-        asns: length_count!(bits!(take_bits!(u8, 8)), asn) >>
+        asns: length_count!(be_u8, asn) >>
         (AsPathSegment{segment_type: segment_type, asns: asns})
     )
 );
 
 named!(community<&[u8], BgpAttributeValue>,
     do_parse!(
-        communities: many0!(complete!(tuple!(u16!(nom::Endianness::Big),
-         u16!(nom::Endianness::Big)))) >>
+        communities: many0!(complete!(tuple!(be_u16, be_u16))) >>
         (BgpAttributeValue::COMMUNITY{communities: communities.iter()
         .map(|x| Community{asn: u32::from(x.0), value: x.1}).collect()})
     )
@@ -455,8 +457,6 @@ named_args!(next_hop(is_ipv6: bool)<&[u8], BgpAttributeValue>,
     )
 );
 
-named!(take_u8_as_u16<&[u8], u16>, map!(bits!(take_bits!(u8, 8)), u16::from));
-named!(take_u16<&[u8], u16>, u16!(nom::Endianness::Big));
 named!(length<&[u8], u32>, u32!(nom::Endianness::Big));
 named!(unix_timestamp<&[u8], u32>, u32!(nom::Endianness::Big));
 named!(mrt_type<&[u8], MrtType>, map!(u16!(nom::Endianness::Big), to_mrt_type));
@@ -512,14 +512,6 @@ fn parse_bgp_attribute(
             &input[(length as usize)..],
             BgpAttributeValue::NOT_IMPLEMENTED { code: code },
         )),
-    }
-}
-
-fn parse_varlength(input: &[u8], extended_length: bool) -> IResult<&[u8], u16> {
-    if extended_length {
-        take_u16(input)
-    } else {
-        take_u8_as_u16(input)
     }
 }
 
