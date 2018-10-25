@@ -1,23 +1,24 @@
-/*
-    An MRT (RFC6396) file parser implemented in Rust, using Nom
-    Copyright (C) 2018  Wouter B. de Vries
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
 #![allow(non_camel_case_types)]
+
+/// An MRT (RFC6396) file parser implemented in Rust, using Nom
+/// Copyright (C) 2018  Wouter B. de Vries
+///
+/// This program is free software: you can redistribute it and/or modify
+/// it under the terms of the GNU General Public License as published by
+/// the Free Software Foundation, either version 3 of the License, or
+/// (at your option) any later version.
+///
+/// This program is distributed in the hope that it will be useful,
+/// but WITHOUT ANY WARRANTY; without even the implied warranty of
+/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+/// GNU General Public License for more details.
+///
+/// You should have received a copy of the GNU General Public License
+/// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #[macro_use]
 extern crate nom;
+use nom::{IResult, be_u8, be_u16, be_u32};
 
 use std::fmt;
 use std::fs::File;
@@ -25,8 +26,6 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str;
-
-use nom::{IResult, be_u8, be_u16, be_u32};
 
 #[derive(Debug)]
 pub struct MrtHeader {
@@ -50,6 +49,7 @@ pub enum MrtType {
     UNKNOWN { code: u16 },
 }
 
+/// Converts the given u16 to the relevant MrtType
 fn to_mrt_type(i: u16) -> MrtType {
     match i {
         11 => MrtType::OSPFv2,
@@ -84,6 +84,7 @@ pub enum MrtSubType {
     UNKNOWN,
 }
 
+/// Converts the given MrtType and u16 to the relevant MrtSubType
 fn to_mrt_sub_type(mrt_type: &MrtType, code: u16) -> MrtSubType {
     match mrt_type {
         MrtType::TABLE_DUMP_V2 => match code {
@@ -279,7 +280,6 @@ named!(bgp_message_open<&[u8], BgpMessage>,
 
 named_args!(route(is_ipv6: bool)<&[u8], Route>,
     do_parse!(
-        //prefix_length: bits!(take_bits!(u8, 8)) >>
         prefix_length: be_u8 >>
         prefix: map!(take!((f64::from(prefix_length)/8.0).ceil()), |x| ip_prefix(x, is_ipv6)) >>
         (Route{prefix_length, prefix})
@@ -515,6 +515,20 @@ fn parse_bgp_attribute(
     }
 }
 
+/// Reads the given file and returns a vector of all MrtEntry found in that file
+///
+/// This potentially uses a lot of RAM, and it's likely better to use MrtFile instead
+///
+///  # Example
+/// ```
+/// use std::fs::File;
+///
+/// let f = File::open("example_data/openbgpd_rib_table-v2").unwrap();
+/// let entries = mrt::read_file_complete(f).unwrap();
+/// for entry in &entries {
+///     println!("{:?}", entry);
+/// }
+/// ```
 pub fn read_file_complete(file: File) -> Result<Vec<MrtEntry>, &'static str> {
     let mut buf_reader = BufReader::new(file);
     let mut contents: Vec<u8> = vec![]; // = [0; 630700];
@@ -528,6 +542,20 @@ pub fn read_file_complete(file: File) -> Result<Vec<MrtEntry>, &'static str> {
     }
 }
 
+/// This struct makes it possible to read an MRT file iteratively
+///
+/// Entries can be returned as they are encountered
+///
+/// # Example
+/// ```
+/// use std::fs::File;
+/// let f = File::open("example_data/openbgpd_rib_table-v2").unwrap();
+/// let mrtfile = mrt::MrtFile::new(f);
+///
+/// for entry in mrtfile {
+///     println!("{:?}", entry);
+/// }
+/// ```
 #[derive(Debug)]
 pub struct MrtFile {
     entry_buffer: Vec<u8>,
