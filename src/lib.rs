@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-
+#![feature(test)]
 /// An MRT (RFC6396) file parser implemented in Rust, using Nom
 /// Copyright (C) 2018  Wouter B. de Vries
 ///
@@ -19,6 +19,7 @@
 #[macro_use]
 extern crate nom;
 use nom::{IResult, be_u8, be_u16, be_u32};
+extern crate test;
 
 use std::fmt;
 use std::fs::File;
@@ -614,5 +615,76 @@ impl Iterator for MrtFile {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+    use test::Bencher;
+
+    const EXAMPLE_DATA: &[u8] = include_bytes!("../example_data/openbgpd_rib_table-v2");
+
+    #[test]
+    fn parse_example_without_errors() {
+        let mut remaining = EXAMPLE_DATA;
+        assert_eq!(remaining.len(), 2143);
+
+        let mut remaining_length_previous = remaining.len();
+
+        while remaining.len() > 0 {
+            let (remaining2, _) = mrt_entry(remaining).unwrap();
+            remaining = remaining2;
+            assert!(remaining_length_previous - remaining.len() > 0);
+            remaining_length_previous = remaining.len();
+        }
+    }
+
+    #[test]
+    fn correct_mrt_header() {
+        let (_, message) = mrt_entry(EXAMPLE_DATA).unwrap();
+        assert_eq!(message.mrt_header.timestamp, 1444842656);
+        assert_eq!(message.mrt_header.mrt_type, MrtType::TABLE_DUMP_V2);
+        assert_eq!(message.mrt_header.mrt_subtype, MrtSubType::PEER_INDEX_TABLE);
+    }
+
+    const PEER_VALUES:[(u32, u32, &str, u8); 3] = [
+        (65000, 3232235530,"192.168.1.10", 2),
+        (65000, 3232235530,"2001:db8:0:1::10", 3),
+        (65000, 3232235622,"0.0.0.0", 0)
+    ];
+    #[test]
+    fn correct_peer_index_table() {
+        let (_, message) = mrt_entry(EXAMPLE_DATA).unwrap();
+
+        if let MrtMessage::PEER_INDEX_TABLE {collector_bgp_id, view_name, peers} = message.message {
+            assert_eq!(collector_bgp_id, 3232235622);
+            assert_eq!(view_name, "");
+            for (i, peer) in peers.iter().enumerate() {
+                assert_eq!(peer.peer_as, PEER_VALUES[i].0);
+                assert_eq!(peer.peer_bgp_id, PEER_VALUES[i].1);
+                assert_eq!(peer.peer_ip_address, IpAddr::from_str(PEER_VALUES[i].2).unwrap());
+                assert_eq!(peer.peer_type, PEER_VALUES[i].3);
+            }
+        } else {
+            assert!(false, "First entry in example data has incorrect type (should be PEER_INDEX_TABLE");
+        }
+    }
+
+    #[bench]
+    fn bench_parse_first_entry(b: &mut Bencher) {
+        b.iter(|| mrt_entry(EXAMPLE_DATA))
+    }
+
+    #[bench]
+    fn bench_parse_file(b: &mut Bencher) {
+        b.iter(|| {
+            let mut remaining = EXAMPLE_DATA;
+            while remaining.len() > 0 {
+                let (remaining2, _) = mrt_entry(remaining).unwrap();
+                remaining = remaining2;
+            }
+        })
     }
 }
