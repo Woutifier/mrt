@@ -139,7 +139,7 @@ pub enum MrtMessage {
         header: RibEntryHeader,
         entries: Vec<RibEntry>,
     },
-    BGP4MPMessageAS4 {
+    BGP4MP_MESSAGE_AS4 {
         peer_as_number: u32,
         local_as_number: u32,
         interface_index: u16,
@@ -269,7 +269,7 @@ named!(bgp4mp_message_as4<&[u8], MrtMessage>,
             3 => call!(bgp_message_notification) |
             4 => call!(bgp_message_keepalive)
         ) >>
-        (MrtMessage::BGP4MPMessageAS4{peer_as_number, local_as_number, interface_index, address_family, peer_ip_address, local_ip_address, message: message})
+        (MrtMessage::BGP4MP_MESSAGE_AS4{peer_as_number, local_as_number, interface_index, address_family, peer_ip_address, local_ip_address, message: message})
     )
 );
 
@@ -557,17 +557,17 @@ pub fn read_file_complete(file: File) -> Result<Vec<MrtEntry>, &'static str> {
 ///     println!("{:?}", entry);
 /// }
 /// ```
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct MrtFile {
     entry_buffer: Vec<u8>,
-    reader: BufReader<File>,
+    reader: Box<dyn Read>,
 }
 
 impl MrtFile {
-    pub fn new(file: File) -> MrtFile {
+    pub fn new<T: Read + 'static>(reader: T) -> MrtFile {
         MrtFile {
             entry_buffer: vec![0; 8 * 1024],
-            reader: BufReader::new(file),
+            reader: Box::new(BufReader::new(reader)),
         }
     }
 }
