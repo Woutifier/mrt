@@ -550,11 +550,20 @@ pub fn read_file_complete(file: File) -> Result<Vec<MrtEntry>, &'static str> {
 /// # Example
 /// ```
 /// use std::fs::File;
+/// use mrt::MrtMessage;
 /// let f = File::open("example_data/openbgpd_rib_table-v2").unwrap();
 /// let mrtfile = mrt::MrtFile::new(f);
 ///
-/// for entry in mrtfile {
-///     println!("{:?}", entry);
+/// for mrt_entry in mrtfile {
+///   match mrt_entry.message {
+///     MrtMessage::RIB_IPV4_UNICAST {header, entries} => {
+///       println!("header: {:?}", header);
+///       for entry in entries {
+///         println!("entry: {:?}", entry);
+///       }
+///     },
+///     _ => continue,
+///   }
 /// }
 /// ```
 //#[derive(Debug)]
