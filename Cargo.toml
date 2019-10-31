@@ -2,10 +2,11 @@
 name = "mrt"
 description = "An MRT (RFC6396) file parser implemented in Rust, using Nom"
 repository = "https://github.com/Woutifier/mrt"
-version = "0.1.2"
+version = "0.2.0"
+edition = "2018"
 authors = ["Wouter de Vries <wouter@wbdv.nl>"]
 readme = "README.md"
 license-file = "LICENSE"
 
 [dependencies]
-nom = "4.1.1"
+nom = "5.0.1"
